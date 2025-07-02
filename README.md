@@ -8,7 +8,7 @@ A Cloudflare Worker that probe whether a website (HTTP/HTTPS service) is "up" or
 - **secret** `API_KEY`: The secret key required in the `x-api-key` header.
 - `CACHE_TTL_SECONDS`: (optional) How long to cache probe results (default: 600 seconds).
 
-Variables are set in [`wrangler.toml`](wrangler.toml), secrets for local development are set in `.dev.vars`.
+Variables are set in [`wrangler.toml`](wrangler.toml), secrets for local development are set in [`.dev.vars`](.dev.vars).
 
 Start a local development server:
 
