@@ -69,6 +69,15 @@ async fn fetch(mut req: Request, env: Env, ctx: Context) -> Result<Response> {
         return Err(Error::from("Host is missing."));
     };
 
+    if let Ok(status) = check_domain(host).await {
+        if status != 0 {
+            return Response::error(
+                format!("Request does not pass domain check [{status}]."),
+                400,
+            );
+        }
+    }
+
     let host_url = format!("{}://{}", target_url.scheme(), host);
     if unique_target.insert(&host_url) {
         probes.push((host_url.to_string(), "host".to_string()));
@@ -182,4 +191,28 @@ async fn probe(url: &str, probe_type: &str) -> ProbeResult {
             status_text: "Request to origin timed-out after 60 secs.".to_string(),
         },
     }
+}
+
+async fn check_domain(domain: &str) -> Result<u64> {
+    let mut url = Url::parse("https://cloudflare-dns.com/dns-query").unwrap();
+    url.set_query(Some(&format!("name={domain}")));
+    let headers = Headers::new();
+    headers.set("Accept", "application/dns-json").unwrap();
+    let request = Request::new_with_init(
+        url.as_str(),
+        &RequestInit {
+            headers,
+            method: Method::Get,
+            ..Default::default()
+        },
+    )?;
+    let mut response = Fetch::Request(request).send().await?;
+    let obj = response.json::<serde_json::Value>().await?;
+
+    let obj = obj.as_object().unwrap();
+    let status = obj.get("Status").unwrap().as_u64().unwrap();
+
+    console_log!("check_domain {domain}: {status}");
+
+    Ok(status)
 }
