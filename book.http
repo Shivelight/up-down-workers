@@ -1,0 +1,17 @@
+@hostname = localhost
+@port = 8787
+@host = {{hostname}}:{{port}}
+@apikey = 8Gvyu7uwc7TI1duHNzL839LpaaihCivl
+
+###
+
+GET http://{{host}}/?url=instagram.com HTTP/1.1
+X-Api-Key: {{apikey}}
+
+###
+
+POST http://{{host}} HTTP/1.1
+X-Api-Key: {{apikey}}
+Content-Type: application/json
+
+{"url": "https://instagram.com"}
