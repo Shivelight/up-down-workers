@@ -1,3 +1,7 @@
+use std::time::Duration;
+
+use futures::future::Either;
+use futures::pin_mut;
 use serde::{Deserialize, Serialize};
 use worker::*;
 
@@ -14,7 +18,6 @@ struct ProbeResult {
     status: String,
     status_code: Option<u16>,
     status_text: String,
-    duration_ms: Option<u64>,
 }
 
 #[derive(Serialize, Clone)]
@@ -129,38 +132,54 @@ async fn probe(url: &str, probe_type: &str) -> ProbeResult {
     )
     .unwrap();
 
-    let start_time = js_sys::Date::now();
-    let result = match Fetch::Request(request).send().await {
-        Ok(response) => {
-            let status_code = response.status_code();
-            let status = if (200..400).contains(&status_code) {
-                "UP"
-            } else {
-                "DOWN"
-            };
+    let controller = AbortController::default();
+    let signal = &controller.signal();
 
-            ProbeResult {
+    let fetch_fut = async {
+        let result = match Fetch::Request(request).send_with_signal(signal).await {
+            Ok(response) => {
+                let status_code = response.status_code();
+                let status = if (200..400).contains(&status_code) {
+                    "UP"
+                } else {
+                    "DOWN"
+                };
+
+                ProbeResult {
+                    probe_type: probe_type.to_string(),
+                    url: url.to_string(),
+                    status: status.to_string(),
+                    status_code: Some(status_code),
+                    status_text: String::new(),
+                }
+            }
+            Err(e) => ProbeResult {
                 probe_type: probe_type.to_string(),
                 url: url.to_string(),
-                status: status.to_string(),
-                status_code: Some(status_code),
-                status_text: String::new(),
-                duration_ms: None,
-            }
-        }
-        Err(e) => ProbeResult {
+                status: "DOWN".to_string(),
+                status_code: None,
+                status_text: format!("Fetch to origin error: {e}"),
+            },
+        };
+
+        result
+    };
+
+    let delay_fut = async {
+        Delay::from(Duration::from_secs(60)).await;
+        controller.abort();
+    };
+
+    pin_mut!(fetch_fut);
+    pin_mut!(delay_fut);
+    match futures::future::select(fetch_fut, delay_fut).await {
+        Either::Left((value, _)) => value,
+        Either::Right(_) => ProbeResult {
             probe_type: probe_type.to_string(),
             url: url.to_string(),
             status: "DOWN".to_string(),
             status_code: None,
-            status_text: format!("Network Error: {e}"),
-            duration_ms: None,
+            status_text: "Request to origin timed-out after 60 secs.".to_string(),
         },
-    };
-
-    let duration = (js_sys::Date::now() - start_time) as u64;
-    ProbeResult {
-        duration_ms: Some(duration),
-        ..result
     }
 }
