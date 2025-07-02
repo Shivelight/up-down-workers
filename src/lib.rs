@@ -40,7 +40,7 @@ async fn fetch(mut req: Request, env: Env, ctx: Context) -> Result<Response> {
     let target_url = match req.method() {
         Method::Post => req.json::<InputUrl>().await,
         Method::Get => req.query::<InputUrl>(),
-        _ => return Err(Error::from("Method not allowed. Use GET or POST.")),
+        _ => return Response::error("Method not allowed. Use GET or POST.", 405),
     };
 
     let mut target_url = match target_url {
